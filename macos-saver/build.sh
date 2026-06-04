@@ -13,6 +13,16 @@ OUT="build"
 SAVER="$OUT/$NAME.saver"
 MACOS="$SAVER/Contents/MacOS"
 
+# プレビュー: ウィンドウで即確認（システム設定での選択不要）
+if [ "${1:-}" = "preview" ]; then
+  mkdir -p "$OUT"
+  echo "==> building preview"
+  swiftc "$SRC" preview.swift -framework ScreenSaver -framework Cocoa \
+    -target "$(uname -m)-apple-macos11" -o "$OUT/preview"
+  echo "==> launching preview (ウィンドウを閉じるか Ctrl+C で終了)"
+  exec "$OUT/preview"
+fi
+
 rm -rf "$OUT"
 mkdir -p "$MACOS"
 
