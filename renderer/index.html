@@ -6,10 +6,34 @@
   <style>
     html, body { margin: 0; height: 100%; background: #000; overflow: hidden; cursor: none; }
     #face { display: block; width: 100vw; height: 100vh; }
+    /* 調整パネル（"c" キーで表示/非表示。本番表示時は隠れている） */
+    #tuner {
+      position: fixed; top: 12px; left: 12px; z-index: 10; display: none;
+      background: rgba(20,20,20,.85); color: #ddd; padding: 12px 14px; border-radius: 8px;
+      font: 12px/1.5 -apple-system, sans-serif; cursor: default; width: 240px;
+    }
+    #tuner.show { display: block; }
+    #tuner label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    #tuner input[type=range] { flex: 1; }
+    #tuner .val { width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
+    #tuner button { margin-top: 8px; width: 100%; padding: 6px; cursor: pointer; }
+    #tuner .hint { opacity: .6; margin-top: 6px; }
   </style>
 </head>
 <body>
   <canvas id="face"></canvas>
+  <div id="tuner">
+    <div><b>調整 (c で開閉)</b></div>
+    <label>顔の拡大 <input id="t_faceScale" type="range" min="0.3" max="2" step="0.01"><span class="val" id="v_faceScale"></span></label>
+    <label>目の半径 <input id="t_eyeR" type="range" min="2" max="40" step="0.5"><span class="val" id="v_eyeR"></span></label>
+    <label>目の間隔 <input id="t_eyeSpread" type="range" min="20" max="140" step="1"><span class="val" id="v_eyeSpread"></span></label>
+    <label>目の高さ <input id="t_eyeY" type="range" min="40" max="180" step="1"><span class="val" id="v_eyeY"></span></label>
+    <label>口の高さ位置 <input id="t_mouthY" type="range" min="80" max="220" step="1"><span class="val" id="v_mouthY"></span></label>
+    <label>口の幅 <input id="t_mouthW" type="range" min="10" max="160" step="1"><span class="val" id="v_mouthW"></span></label>
+    <label>口の太さ <input id="t_mouthH" type="range" min="1" max="40" step="1"><span class="val" id="v_mouthH"></span></label>
+    <button id="t_copy">この値を console に出力</button>
+    <div class="hint">合った値を console からコピーして送ってください</div>
+  </div>
   <script src="face.js"></script>
 </body>
 </html>
