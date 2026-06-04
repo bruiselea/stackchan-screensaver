@@ -114,7 +114,7 @@ class StackchanSaverView: ScreenSaverView {
         }
     }
 
-    private let sleepyAfterSec: Double = 120  // この秒数より長く表示され続けたら眠い
+    private let sleepyAfterSec: Double = 300  // この秒数より長く表示され続けたら眠い（実運用=5分）
 
     private func updateExpression() {
         if let f = forcedExpr { expr = f; return }
