@@ -1,145 +1,122 @@
-// スタックちゃん顔（プロシージャル）を Canvas に描画する。
-// 本家 meganetaaan/m5stack-avatar (MIT) の挙動を参考に Web へ移植:
-//   - 目/口を図形で描く
-//   - ランダムな瞬き (blink)
-//   - 呼吸 (breath) による上下のゆらぎ
-//   - 時々の視線移動 (saccade)
-// 顔の見た目パラメータは FACE で調整できる。
+// スタックちゃん顔（本家 meganetaaan/m5stack-avatar, MIT を忠実移植）
+// 本家 src/Face.cpp / Eye.cpp / Mouth.cpp / ColorPalette.cpp の既定値をそのまま使用。
+//
+//   仮想画面 320x240（M5 の画面）に本家座標で描き、ウィンドウ全体へ拡大。
+//   - 配色: 背景=黒 / 顔=白
+//   - 目  : 半径8 の塗り円。右目(90,93) / 左目(230,96)。
+//           まばたきは openRatio==0 のとき「幅16×高4 の横線」になる（本家どおりの瞬間方式）
+//   - 口  : Mouth(minW=50,maxW=90,minH=4,maxH=60) の塗り矩形。中心(163,148)
+//           w = 50 + 40*(1-open),  h = 4 + 56*open,  閉じ時=幅90×高4 の細バー
+//   - 視線: gaze(-1..1)*3px のゆらぎ
+//   - 呼吸: 口の y に breath*2px
 
-const FACE = {
-  bg: '#000000',
-  color: '#e8e8e8',   // 目・口の色
-  eyeR: 56,           // 目の半径(px) ※基準1080pで自動スケール
-  eyeGap: 320,        // 左右の目の中心間隔(px)
-  eyeY: -40,          // 顔中心からの目の縦オフセット
-  mouthY: 140,        // 顔中心からの口の縦オフセット
-  mouthW: 220,        // 口の幅
-}
+const VW = 320, VH = 240            // 本家の画面サイズ
+const PRIMARY = '#ffffff'           // COLOR_PRIMARY = TFT_WHITE
+const BG = '#000000'                // COLOR_BACKGROUND = TFT_BLACK
+
+const EYE_R = 8
+const EYE_R_POS = { x: 90, y: 93 }  // 本家「右目」 BoundingRect(top=93,left=90)
+const EYE_L_POS = { x: 230, y: 96 } // 本家「左目」 BoundingRect(top=96,left=230)
+const MOUTH = { x: 163, y: 148, minW: 50, maxW: 90, minH: 4, maxH: 60 }
 
 const canvas = document.getElementById('face')
 const ctx = canvas.getContext('2d')
 
-let W = 0, H = 0, scale = 1
+let W = 0, H = 0, scale = 1, offX = 0, offY = 0
 function resize() {
   const dpr = window.devicePixelRatio || 1
   W = window.innerWidth
   H = window.innerHeight
   canvas.width = W * dpr
   canvas.height = H * dpr
+  // 仮想 320x240 をアスペクト維持で中央にフィット
+  scale = Math.min(W / VW, H / VH)
+  offX = (W - VW * scale) / 2
+  offY = (H - VH * scale) / 2
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-  scale = Math.min(W, H * (16 / 9)) / 1920 // 基準幅に対するスケール
 }
 window.addEventListener('resize', resize)
 resize()
 
-// ---- アニメーション状態 ----
-let blink = 0            // 0=開, 1=閉
+// 仮想座標 → 実座標
+const sx = (x) => offX + x * scale
+const sy = (y) => offY + y * scale
+const sr = (r) => r * scale
+
+// ---- 状態 ----
+let openRatio = 1            // 両目共通（本家の autoblink も両目同時）
+let blinkUntil = 0           // この時刻まで閉じ
 let nextBlinkAt = 0
-let blinkPhase = 'idle'  // idle | closing | opening
-let blinkT = 0
 let gaze = { x: 0, y: 0, tx: 0, ty: 0 }
-let nextSaccadeAt = 0
-
-function scheduleBlink(now) {
-  // 2〜6 秒に一度まばたき
-  nextBlinkAt = now + 2000 + Math.floor((Math.sin(now * 0.013) * 0.5 + 0.5) * 4000)
-}
-function scheduleSaccade(now) {
-  nextSaccadeAt = now + 3000 + (Math.sin(now * 0.007) * 0.5 + 0.5) * 5000
+let nextGazeAt = 0
+let seed = 12345
+function rnd() { // 決定的擬似乱数（Math.random 不使用方針に合わせる）
+  seed = (seed * 1103515245 + 12345) & 0x7fffffff
+  return seed / 0x7fffffff
 }
 
-function updateBlink(now, dt) {
-  if (blinkPhase === 'idle' && now >= nextBlinkAt) { blinkPhase = 'closing'; blinkT = 0 }
-  const SPEED = 7 // 大きいほど速い
-  if (blinkPhase === 'closing') {
-    blink = Math.min(1, blink + dt * SPEED)
-    if (blink >= 1) blinkPhase = 'opening'
-  } else if (blinkPhase === 'opening') {
-    blink = Math.max(0, blink - dt * SPEED)
-    if (blink <= 0) { blinkPhase = 'idle'; scheduleBlink(now) }
-  }
-}
+function scheduleBlink(now) { nextBlinkAt = now + 2000 + rnd() * 4000 }   // 2〜6秒
+function scheduleGaze(now)  { nextGazeAt  = now + 2500 + rnd() * 4000 }
 
-function updateGaze(now, dt) {
-  if (now >= nextSaccadeAt) {
-    // 軽く視線を振る（ときどき中央へ戻す）
-    const back = (Math.sin(now * 0.011) > 0.4)
-    gaze.tx = back ? 0 : (Math.sin(now * 0.31) * 26)
-    gaze.ty = back ? 0 : (Math.cos(now * 0.27) * 14)
-    scheduleSaccade(now)
-  }
-  gaze.x += (gaze.tx - gaze.x) * Math.min(1, dt * 6)
-  gaze.y += (gaze.ty - gaze.y) * Math.min(1, dt * 6)
-}
-
-function drawEye(cx, cy, openRatio) {
-  const r = FACE.eyeR * scale
-  ctx.save()
-  ctx.translate(cx, cy)
-  ctx.fillStyle = FACE.color
+function fillCircle(cx, cy, r) {
   ctx.beginPath()
-  // 瞬き = 縦をつぶす。完全に閉じると細い線
-  const ry = Math.max(r * 0.06, r * openRatio)
-  ctx.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2)
+  ctx.arc(sx(cx), sy(cy), sr(r), 0, Math.PI * 2)
   ctx.fill()
-  ctx.restore()
+}
+function fillRect(x, y, w, h) {
+  ctx.fillRect(sx(x), sy(y), sr(w), sr(h))
 }
 
-function drawMouth(cx, cy, open) {
-  ctx.save()
-  ctx.strokeStyle = FACE.color
-  ctx.fillStyle = FACE.color
-  ctx.lineWidth = 10 * scale
-  ctx.lineCap = 'round'
-  const w = FACE.mouthW * scale
-  if (open < 0.04) {
-    // 閉じ口 = 横線
-    ctx.beginPath()
-    ctx.moveTo(cx - w / 2, cy)
-    ctx.lineTo(cx + w / 2, cy)
-    ctx.stroke()
+function drawEye(pos, gx, gy) {
+  ctx.fillStyle = PRIMARY
+  if (openRatio > 0) {
+    fillCircle(pos.x + gx, pos.y + gy, EYE_R)            // 開: 塗り円
   } else {
-    // 開き口 = 角丸の塗り
-    const h = open * 90 * scale
-    ctx.beginPath()
-    ctx.ellipse(cx, cy + h / 4, w / 2, h, 0, 0, Math.PI * 2)
-    ctx.fill()
+    fillRect(pos.x - EYE_R + gx, pos.y - 2 + gy, EYE_R * 2, 4) // 閉: 横線
   }
-  ctx.restore()
+}
+
+function drawMouth(breath) {
+  const open = 0 // 待機は閉じ（将来 lipsync でここを動かす）
+  const w = MOUTH.minW + (MOUTH.maxW - MOUTH.minW) * (1 - open)
+  const h = MOUTH.minH + (MOUTH.maxH - MOUTH.minH) * open
+  ctx.fillStyle = PRIMARY
+  fillRect(MOUTH.x - w / 2, MOUTH.y - h / 2 + breath * 2, w, h)
 }
 
 let last = 0
 function frame(now) {
-  if (!last) { last = now; scheduleBlink(now); scheduleSaccade(now) }
+  if (!last) { last = now; scheduleBlink(now); scheduleGaze(now) }
   const dt = Math.min(0.05, (now - last) / 1000)
   last = now
 
-  updateBlink(now, dt)
-  updateGaze(now, dt)
+  // まばたき（本家どおり：一瞬だけ閉じる）
+  if (now >= nextBlinkAt && now >= blinkUntil) { blinkUntil = now + 120; scheduleBlink(now) }
+  openRatio = (now < blinkUntil) ? 0 : 1
 
-  // 呼吸: 顔全体をゆっくり上下
-  const breath = Math.sin(now * 0.0016) * 10 * scale
-  // 待機時の口: 呼吸に合わせてほんの少しだけ動く
-  const mouthOpen = (Math.sin(now * 0.0016) * 0.5 + 0.5) * 0.08
+  // 視線（±1 をなめらかに追従 → 描画時 *3px）
+  if (now >= nextGazeAt) {
+    gaze.tx = (rnd() * 2 - 1)
+    gaze.ty = (rnd() * 2 - 1)
+    scheduleGaze(now)
+  }
+  gaze.x += (gaze.tx - gaze.x) * Math.min(1, dt * 4)
+  gaze.y += (gaze.ty - gaze.y) * Math.min(1, dt * 4)
+  const gx = gaze.x * 3, gy = gaze.y * 3
 
-  ctx.fillStyle = FACE.bg
+  // 呼吸（-1..1）
+  const breath = Math.sin(now * 0.0016)
+
+  ctx.fillStyle = BG
   ctx.fillRect(0, 0, W, H)
-
-  const cx = W / 2
-  const cy = H / 2 + breath
-  const gap = FACE.eyeGap * scale
-  const eyeY = cy + FACE.eyeY * scale + gaze.y * scale
-  const openRatio = 1 - blink
-
-  drawEye(cx - gap / 2 + gaze.x * scale, eyeY, openRatio)
-  drawEye(cx + gap / 2 + gaze.x * scale, eyeY, openRatio)
-  drawMouth(cx, cy + FACE.mouthY * scale, mouthOpen)
+  drawEye(EYE_R_POS, gx, gy)
+  drawEye(EYE_L_POS, gx, gy)
+  drawMouth(breath)
 
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
 
-// メインプロセスからの show/hide（今は描画は常時。将来ここで一時停止等を制御）
 if (window.screensaver) {
   window.screensaver.onShow(() => { last = 0 })
   window.screensaver.onHide(() => {})
