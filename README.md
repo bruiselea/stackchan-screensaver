@@ -59,3 +59,63 @@ IOKit 電源情報など、許可ダイアログの出ない API を使用。
 - 「スタックちゃん / Stack-chan」の名称・キャラクターは [@meganetaaan](https://github.com/meganetaaan)
   氏のプロジェクト [stack-chan](https://github.com/meganetaaan/stack-chan) に由来します。
   本リポジトリは個人的な再実装であり、公式の製品ではありません。
+
+---
+
+# stackchan-screensaver (English)
+
+A **macOS screen saver (`.saver`)** that shows a Stack-chan–style face full-screen
+when your Mac is left idle. The face is a reimplementation in Swift (`ScreenSaverView`)
+based on the behavior, geometry, and expression logic of
+[meganetaaan/m5stack-avatar](https://github.com/meganetaaan/m5stack-avatar) (MIT)
+— blinking, breathing, and gaze drift.
+
+It also **changes expression based on your Mac's state** (using only APIs that don't
+require a privacy permission prompt).
+
+| State (top has priority) | Expression |
+|------|------|
+| High CPU load / thermal pressure | Angry (a diagonal cut over the eyes) |
+| Charging (AC connected) | Happy (◠-shaped eyes) |
+| Battery < 20% | Sad |
+| Displayed for a long time (default > 5 min) | Sleepy (half-closed eyes) |
+| Otherwise | Neutral |
+
+## Requirements
+
+- **Tested on macOS 26.3 (Apple Silicon)** — author's environment only; other versions / Intel are unverified
+- **Build target: macOS 11 (Big Sur) or later** (arm64 / x86_64 universal)
+- No Xcode required — builds with the `swiftc` command line only
+
+## Install (no Xcode, all CLI)
+
+```bash
+cd macos-saver
+./build.sh open      # build → install into ~/Library/Screen Savers → open Screen Saver settings
+```
+
+Then pick **StackchanSaver** in System Settings → Screen Saver.
+
+- `./build.sh preview` … instant preview window (`n` neutral / `h` happy / `a` angry / `d` sad / `s` sleepy / `space` auto)
+- `./build.sh install` … build and install only
+- Details: [`macos-saver/README.md`](macos-saver/README.md)
+
+## How it works
+
+`swiftc` assembles an arm64 + x86_64 universal binary into a `.saver` bundle and
+ad-hoc signs it. Idle detection, full-screen, and dismissal are handled by the OS
+(ScreenSaver framework), so no overlay or background-agent permissions are needed.
+State is read via permission-free APIs such as `getloadavg`,
+`ProcessInfo.thermalState`, and IOKit power-source info.
+
+> **A Windows version is currently in development** (Electron-based, in a separate private repo).
+
+## License / Credits
+
+- This repository: **MIT** ([`LICENSE`](LICENSE))
+- The face behavior / expression logic is reimplemented based on **m5stack-avatar** by
+  [@meganetaaan](https://github.com/meganetaaan) (Shinya Ishikawa, MIT, Copyright (c) 2018).
+  Huge thanks to the original work 🙏 See [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md).
+- The name and character "Stack-chan / スタックちゃん" originate from
+  [@meganetaaan](https://github.com/meganetaaan)'s [stack-chan](https://github.com/meganetaaan/stack-chan)
+  project. This repository is a personal reimplementation and is **not** an official product.
