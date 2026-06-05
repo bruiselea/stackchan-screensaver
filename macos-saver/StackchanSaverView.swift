@@ -12,6 +12,7 @@ import ScreenSaver
 import Cocoa
 import IOKit.ps
 import Darwin
+import os
 
 @objc(StackchanSaverView)
 class StackchanSaverView: ScreenSaverView {
@@ -41,11 +42,15 @@ class StackchanSaverView: ScreenSaverView {
 
     // --- システム状態 ---
     private var expr: Expression = .neutral
-    private var cpuLoad: Double = 0
+    private var cpuLoad: Double = 0       // getloadavg を コア数で正規化 (0..1+)
+    private var thermalHot: Bool = false  // ProcessInfo.thermalState が serious 以上
     private var isCharging: Bool = false
     private var battery: Double = 1.0
-    private var prevCPU: (busy: Double, total: Double)?
     private var sampleAccum: Double = 0
+
+    // 本番セーバ(サンドボックス)で何が読めるか確認するためのログ。
+    //   log show --predicate 'subsystem == "com.bruiselea.stackchan-screensaver"' --last 5m --info
+    private let log = Logger(subsystem: "com.bruiselea.stackchan-screensaver", category: "state")
 
     // --- プレビュー用: キーで表情を固定（nil=自動） ---
     var testKeysEnabled = false
@@ -69,32 +74,22 @@ class StackchanSaverView: ScreenSaverView {
 
     // MARK: - 状態取得（許可不要）
 
-    private func sampleState() { sampleCPU(); samplePower() }
+    private func sampleState() {
+        sampleCPU(); samplePower()
+        log.info("cpu=\(self.cpuLoad, privacy: .public) hot=\(self.thermalHot, privacy: .public) charging=\(self.isCharging, privacy: .public) batt=\(self.battery, privacy: .public) t=\(Int(self.t), privacy: .public)")
+    }
 
+    // CPU 負荷: getloadavg(POSIX) をコア数で正規化。サンドボックスでも通る。
+    // 加えて ProcessInfo.thermalState(発熱)も拾う。
     private func sampleCPU() {
-        var numCPUs: natural_t = 0
-        var info: processor_info_array_t?
-        var infoCount: mach_msg_type_number_t = 0
-        let kr = host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO,
-                                     &numCPUs, &info, &infoCount)
-        guard kr == KERN_SUCCESS, let cpuInfo = info else { return }
-        var busy = 0.0, total = 0.0
-        let states = Int(CPU_STATE_MAX)
-        for i in 0..<Int(numCPUs) {
-            let u = Double(cpuInfo[i*states + Int(CPU_STATE_USER)])
-            let s = Double(cpuInfo[i*states + Int(CPU_STATE_SYSTEM)])
-            let n = Double(cpuInfo[i*states + Int(CPU_STATE_NICE)])
-            let idle = Double(cpuInfo[i*states + Int(CPU_STATE_IDLE)])
-            busy += u + s + n
-            total += u + s + n + idle
+        var loads = [Double](repeating: 0, count: 3)
+        let n = getloadavg(&loads, 3)
+        if n > 0 {
+            let cores = Double(max(1, ProcessInfo.processInfo.activeProcessorCount))
+            cpuLoad = max(0, loads[0] / cores)
         }
-        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: cpuInfo),
-                      vm_size_t(infoCount) * vm_size_t(MemoryLayout<integer_t>.stride))
-        if let p = prevCPU {
-            let db = busy - p.busy, dt = total - p.total
-            if dt > 0 { cpuLoad = max(0, min(1, db / dt)) }
-        }
-        prevCPU = (busy, total)
+        let th = ProcessInfo.processInfo.thermalState
+        thermalHot = (th == .serious || th == .critical)
     }
 
     private func samplePower() {
@@ -118,7 +113,7 @@ class StackchanSaverView: ScreenSaverView {
 
     private func updateExpression() {
         if let f = forcedExpr { expr = f; return }
-        if cpuLoad > 0.7 { expr = .angry }            // CPU 使いすぎ
+        if cpuLoad > 0.7 || thermalHot { expr = .angry } // CPU 使いすぎ / 発熱
         else if isCharging { expr = .happy }          // 充電中
         else if battery < 0.2 { expr = .sad }         // 電池少ない
         else if t > sleepyAfterSec { expr = .sleepy } // 長時間表示
