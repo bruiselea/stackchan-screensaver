@@ -61,12 +61,14 @@ class StackchanSaverView: ScreenSaverView {
         animationTimeInterval = 1.0 / 60.0
         scheduleBlink(); scheduleGaze()
         sampleState(); updateExpression()
+        log.notice("StackchanSaver loaded")
     }
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         animationTimeInterval = 1.0 / 60.0
         scheduleBlink(); scheduleGaze()
         sampleState(); updateExpression()
+        log.notice("StackchanSaver loaded")
     }
 
     private func scheduleBlink() { nextBlinkAt = t + 2.0 + Double.random(in: 0...4) }
@@ -76,7 +78,7 @@ class StackchanSaverView: ScreenSaverView {
 
     private func sampleState() {
         sampleCPU(); samplePower()
-        log.info("cpu=\(self.cpuLoad, privacy: .public) hot=\(self.thermalHot, privacy: .public) charging=\(self.isCharging, privacy: .public) batt=\(self.battery, privacy: .public) t=\(Int(self.t), privacy: .public)")
+        log.notice("cpu=\(self.cpuLoad, privacy: .public) hot=\(self.thermalHot, privacy: .public) charging=\(self.isCharging, privacy: .public) batt=\(self.battery, privacy: .public) t=\(Int(self.t), privacy: .public) expr=\(String(describing: self.expr), privacy: .public)")
     }
 
     // CPU 負荷: getloadavg(POSIX) をコア数で正規化。サンドボックスでも通る。
