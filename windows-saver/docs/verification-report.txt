@@ -1,0 +1,22 @@
+PASS Windows command line: /s, /c, /p, colon, case, safe default
+PASS Expression priority and exact 70%, 20%, 300-second boundaries
+PASS AC, absent battery, unknown status and charge percentage
+PASS CPU deltas, idle accounting, counter resets and resume baseline
+PASS Animation: blinks, gaze, breathing time, suspend, resume and long frames
+PASS Mouse dismissal: jitter ignored; accumulated slow movement exits
+PASS Rendering: all faces, eye masks, blink and aspect ratio
+INFO Real state: CPU=18.2%, AC=True, battery=unknown/absent
+PASS Real Windows CPU and power APIs
+PASS Hidden window: actual suspend/resume/power/session messages and timer
+PASS Hidden saver: keyboard/mouse/display/session exit messages
+PASS Simulated dual monitors: negative coordinates and all-window exit
+PASS Real .scr process x5: embedded preview, resize, input, parent destruction
+PASS Real .scr process: invalid arguments fail without UI
+INFO GDI handles: 19 -> 19
+PASS Resource stability over 2400 frames and 30 window lifecycles
+PASS Test windows do not own the foreground
+
+No OS sleep, lock, display-power change, screensaver registration, registry write, broadcast or global input injection was performed.
+Hardware sleep/resume, actual fullscreen/RDP reconnect, multiple physical displays and Windows idle activation remain unverified.
+OS: Microsoft Windows NT 10.0.26200.0; CLR: 4.0.30319.42000; 64-bit process: True
+Result: PASS (0 failed groups)

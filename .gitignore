@@ -3,3 +3,5 @@ dist/
 .DS_Store
 ARTICLE.md
 ARTICLE_note.md
+windows-saver/test-results/
+windows-saver/*.zip

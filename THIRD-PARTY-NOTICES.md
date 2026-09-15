@@ -1,7 +1,7 @@
 # Third-Party Notices
 
 このプロジェクトの顔描画は、下記プロジェクトの挙動・座標・表情ロジックを参考に
-独自に再実装したものです（コードのコピーではなく、Canvas / Swift への移植）。
+再実装したものです（Canvas / Swift への移植、および元のSwift実装からC# / Windows Formsへの移植）。
 
 ## m5stack-avatar
 
